@@ -712,10 +712,12 @@ jobs:
             chmod +x "$f"
           done
 
-      - name: Add SukiSU Nova
+            - name: Add SukiSU Nova
         run: |
           cd kernel_workspace/kernel_platform
           KSU_META="${{ github.event.inputs.KSU_META }}"
+          OFFICIAL_URL="https://github.com/SukiSU-Nova/SukiSU-Nova.git"
+          PRIVATE_URL="https://git.zako.shirkneko.top:20004/shirkneko/SukiSU.git"
 
           # 必须包含两个分隔符（至少四个字段）
           if [[ "$(grep -o '/' <<< "$KSU_META" | wc -l)" -lt 3 ]]; then
@@ -735,19 +737,32 @@ jobs:
           cd ./KernelSU
 
           # ================= SukiSU Nova 仓库源自动切换 =================
-          echo "DEBUG_KSU_REPO=[${{ github.event.inputs.KSU_REPO }}]"
+          echo "::group::DEBUG KSU_REPO INPUT"
+          printf 'RAW KSU_REPO value: |%s|\n' "${{ github.event.inputs.KSU_REPO }}"
+          echo "::endgroup::"
+
+          echo "::group::BEFORE repo switch (origin status)"
+          git remote -v
+          git branch -vv
+          echo "::endgroup::"
+
           if [ "${{ github.event.inputs.KSU_REPO }}" == "ShirkNeko (SukiSU Nova 私人测试库)" ]; then
             echo "⚠️ [SukiSU Nova] 识别到选择了 ShirkNeko 私人测试库，正在切换 SukiSU Nova 源码源..."
             export GIT_SSL_NO_VERIFY=true
-            git remote set-url origin "https://git.zako.shirkneko.top:20004/shirkneko/SukiSU.git"
-            git fetch origin --depth=50
-            git checkout "$KSU_MANAGER_BRANCH" 2>/dev/null || git checkout main
-            git reset --hard origin/"$KSU_MANAGER_BRANCH" 2>/dev/null || git reset --hard origin/main || echo "::warning::私库分支重置失败，请检查分支名"
-            echo "✅ [SukiSU Nova] 私人库源码切换完毕！"
-            git remote -v
+            git remote set-url origin "$PRIVATE_URL"
           else
-            echo "✅ [SukiSU Nova] 使用默认 GitHub 官方源码仓库。"
+            echo "✅ [SukiSU Nova] 选择 GitHub 官方源码仓库，强制重置 origin 为官方地址"
+            git remote set-url origin "$OFFICIAL_URL"
           fi
+
+          git fetch origin --depth=50
+          git checkout "$KSU_MANAGER_BRANCH" 2>/dev/null || git checkout main
+          git reset --hard origin/"$KSU_MANAGER_BRANCH" 2>/dev/null || git reset --hard origin/main || echo "::warning::分支重置失败，请检查分支名"
+
+          echo "::group::AFTER repo switch (origin status)"
+          git remote -v
+          git branch -vv
+          echo "::endgroup::"
 
           # 如果指定了手动 hash，就切换到该提交
           if [[ -n "$MANUAL_HASH" ]]; then
@@ -816,7 +831,6 @@ jobs:
           fi
           echo "🔗 实际源码拉取地址: $REAL_SOURCE_URL"
           echo "===================================================="
-
           echo "✅ SukiSU Nova 检出: $KSU_COMMIT_SHORT ($KSU_COMMIT_FULL) | version=$VERSION_FULL"
 
           ESC_VERSION_FULL=$(printf '%s' "$VERSION_FULL" | sed 's/[&|\\/]/\\&/g')
@@ -847,7 +861,157 @@ jobs:
           echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
           grep -nE '^(REPO_OWNER|REPO_NAME|REPO_BRANCH|KSU_VERSION_API|KSU_VERSION_FULL|VERSION_TAG|GIT_BIN|CURL_BIN)' kernel/Makefile || true
           echo "::endgroup::"
+             
+      - name: Add SukiSU Nova
+        run: |
+          cd kernel_workspace/kernel_platform
+          KSU_META="${{ github.event.inputs.KSU_META }}"
+          OFFICIAL_URL="https://github.com/SukiSU-Nova/SukiSU-Nova.git"
+          PRIVATE_URL="https://git.zako.shirkneko.top:20004/shirkneko/SukiSU.git"
 
+          # 必须包含两个分隔符（至少四个字段）
+          if [[ "$(grep -o '/' <<< "$KSU_META" | wc -l)" -lt 3 ]]; then
+            echo "错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 管理器分支名/内置分支名/自定义标识(可省略)/提交hash(可省略)"
+            exit 10
+          fi
+
+          # 解析字段：分支 / 自定义标识 / 手动 hash
+          IFS='/' read -r KSU_MANAGER_BRANCH KSU_BUILTIN_BRANCH KSU_CUSTOM_TAG MANUAL_HASH <<< "$KSU_META"
+          echo "KSU_MANAGER_BRANCH=$KSU_MANAGER_BRANCH" >> $GITHUB_ENV
+          echo "KSU_BUILTIN_BRANCH=$KSU_BUILTIN_BRANCH" >> $GITHUB_ENV
+          [[ -n "$KSU_CUSTOM_TAG" ]] && echo "自定义版本标识: $KSU_CUSTOM_TAG" || echo "自定义版本标识: 未启用"
+          [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
+
+          # 先按官方方式拉取 setup.sh
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Nova/SukiSU-Nova/${KSU_MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$KSU_BUILTIN_BRANCH"
+          cd ./KernelSU
+
+          # ================= SukiSU Nova 仓库源自动切换 =================
+          echo "::group::DEBUG KSU_REPO INPUT"
+          printf 'RAW KSU_REPO value: |%s|\n' "${{ github.event.inputs.KSU_REPO }}"
+          echo "::endgroup::"
+
+          echo "::group::BEFORE repo switch (origin status)"
+          git remote -v
+          git branch -vv
+          echo "::endgroup::"
+
+          if [ "${{ github.event.inputs.KSU_REPO }}" == "ShirkNeko (SukiSU Nova 私人测试库)" ]; then
+            echo "⚠️ [SukiSU Nova] 识别到选择了 ShirkNeko 私人测试库，正在切换 SukiSU Nova 源码源..."
+            export GIT_SSL_NO_VERIFY=true
+            git remote set-url origin "$PRIVATE_URL"
+          else
+            echo "✅ [SukiSU Nova] 选择 GitHub 官方源码仓库，强制重置 origin 为官方地址"
+            git remote set-url origin "$OFFICIAL_URL"
+          fi
+
+          git fetch origin --depth=50
+          git checkout "$KSU_MANAGER_BRANCH" 2>/dev/null || git checkout main
+          git reset --hard origin/"$KSU_MANAGER_BRANCH" 2>/dev/null || git reset --hard origin/main || echo "::warning::分支重置失败，请检查分支名"
+
+          echo "::group::AFTER repo switch (origin status)"
+          git remote -v
+          git branch -vv
+          echo "::endgroup::"
+
+          # 如果指定了手动 hash，就切换到该提交
+          if [[ -n "$MANUAL_HASH" ]]; then
+            git fetch origin "$KSU_BUILTIN_BRANCH" --depth=50
+            git checkout "$MANUAL_HASH"
+            SHORT_HASH=${MANUAL_HASH:0:8}
+          fi
+
+          # ================= 智能获取 SukiSU Nova 版本号 =================
+          if [ "${{ github.event.inputs.KSU_REPO }}" == "ShirkNeko (SukiSU Nova 私人测试库)" ]; then
+            echo "📦 正在从 ShirkNeko 私库的本地源码中提取版本号..."
+            KSU_VERSION_TAG=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || true)
+          else
+            echo "📦 正在从 GitHub 官方获取最新版本号..."
+            KSU_VERSION_TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://github.com/SukiSU-Nova/SukiSU-Nova/releases/latest \
+              | sed -E 's#.*/tag/##; s/^v//' || true)
+          fi
+
+          # 兜底逻辑：万一都没抓到，强制使用 3.1.7
+          if [ -z "$KSU_VERSION_TAG" ]; then
+            echo "::warning::未抓到版本号，使用 3.1.7 兜底。"
+            KSU_VERSION_TAG="3.1.7"
+          fi
+          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
+          echo "✅ 抓取到 SukiSU Nova 版本号: $KSU_VERSION_TAG"
+
+          GIT_HASH=$(git rev-parse --short HEAD)
+          KSU_COMMIT_FULL=$(git rev-parse HEAD)
+          KSU_COMMIT_SHORT="$GIT_HASH"
+          KSU_GIT_DESCRIBE=$(git describe --tags --always 2>/dev/null || echo "N/A")
+          KSU_COMMIT_DATE=$(git log -1 --format='%ci' 2>/dev/null || echo "N/A")
+          KSU_COMMIT_SUBJECT=$(git log -1 --format='%s' 2>/dev/null || echo "N/A")
+          KSU_COMMIT_AUTHOR=$(git log -1 --format='%an <%ae>' 2>/dev/null || echo "N/A")
+          echo "GIT_HASH=$GIT_HASH"
+          {
+           echo "KSU_COMMIT_FULL=$KSU_COMMIT_FULL"
+           echo "KSU_COMMIT_SHORT=$KSU_COMMIT_SHORT"
+           echo "KSU_GIT_DESCRIBE=$KSU_GIT_DESCRIBE"
+           echo "KSU_COMMIT_DATE=$KSU_COMMIT_DATE"
+           echo "KSU_COMMIT_SUBJECT=$KSU_COMMIT_SUBJECT"
+           echo "KSU_COMMIT_AUTHOR=$KSU_COMMIT_AUTHOR"
+          } >> "$GITHUB_ENV"
+
+          # 组装版本号
+          if [[ -n "$MANUAL_HASH" ]]; then
+            USE_HASH="$SHORT_HASH"
+          else
+            USE_HASH="$GIT_HASH"
+          fi
+          if [[ -z "$KSU_CUSTOM_TAG" ]]; then
+             VERSION_FULL="v$KSU_VERSION_TAG-$USE_HASH@$KSU_BUILTIN_BRANCH"
+          else
+             VERSION_FULL="v$KSU_VERSION_TAG-$KSU_CUSTOM_TAG@$KSU_BUILTIN_BRANCH[$USE_HASH]"
+          fi
+          echo "VERSION_FULL=$VERSION_FULL" >> "$GITHUB_ENV"
+
+          # ================= SukiSU Nova 源码拉取仓库确认 =================
+          echo "========== [SukiSU Nova 源码拉取仓库确认] =========="
+          REAL_SOURCE_URL=$(git remote get-url origin)
+          if [[ "$REAL_SOURCE_URL" == *"git.zako.shirkneko.top"* ]]; then
+            echo "📡 当前 SukiSU Nova 源码拉取仓库：ShirkNeko 私人 Git 服务器"
+          else
+            echo "📡 当前 SukiSU Nova 源码拉取仓库：GitHub 官方仓库"
+          fi
+          echo "🔗 实际源码拉取地址: $REAL_SOURCE_URL"
+          echo "===================================================="
+          echo "✅ SukiSU Nova 检出: $KSU_COMMIT_SHORT ($KSU_COMMIT_FULL) | version=$VERSION_FULL"
+
+          ESC_VERSION_FULL=$(printf '%s' "$VERSION_FULL" | sed 's/[&|\\/]/\\&/g')
+          ESC_KSU_VERSION_TAG=$(printf '%s' "$KSU_VERSION_TAG" | sed 's/[&|\\/]/\\&/g')
+
+          if grep -q '^KSU_VERSION_FULL := ' kernel/Makefile; then
+            sed -i "s|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $ESC_VERSION_FULL|" kernel/Makefile || true
+          else
+            awk -v full="$VERSION_FULL" '
+              /^REPO_OWNER :=/ && !done {
+                print
+                print ""
+                print "KSU_VERSION_FULL := " full
+                done=1
+                next
+              }
+              { print }
+            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile || true
+          fi
+
+          if grep -q '^KSU_VERSION_API := ' kernel/Makefile; then
+            sed -i "s|^KSU_VERSION_API := .*|KSU_VERSION_API := $ESC_KSU_VERSION_TAG|" kernel/Makefile || true
+          fi
+
+          KSU_VERSION=$(expr $(git rev-list --count "$KSU_MANAGER_BRANCH" 2>/dev/null || echo 13000) + 37185) || true
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+
+          echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
+          grep -nE '^(REPO_OWNER|REPO_NAME|REPO_BRANCH|KSU_VERSION_API|KSU_VERSION_FULL|VERSION_TAG|GIT_BIN|CURL_BIN)' kernel/Makefile || true
+          echo "::endgroup::"
+            
       - name: Apply Patches SukiSU Nova
         env:
          FILE: ${{ github.event.inputs.FILE }}
