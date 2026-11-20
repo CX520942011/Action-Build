@@ -730,6 +730,7 @@ jobs:
           echo "KSU_BUILTIN_BRANCH=$KSU_BUILTIN_BRANCH" >> $GITHUB_ENV
           [[ -n "$KSU_CUSTOM_TAG" ]] && echo "自定义版本标识: $KSU_CUSTOM_TAG" || echo "自定义版本标识: 未启用"
           [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
+               
           # ==========获取setup.sh：私库用git clone，官方源用curl raw==========
           if [ "${{ github.event.inputs.KSU_REPO }}" == "ShirkNeko (SukiSU Nova 私人测试库)" ]; then
             echo "使用 git clone 获取 setup.sh（私库）"
@@ -741,6 +742,24 @@ jobs:
             echo "setup.sh 下载地址: ${SETUP_SH_URL}"
             curl -LSs --max-time 120 --retry 3 --retry-delay 5 "${SETUP_SH_URL}" | bash -s "$KSU_BUILTIN_BRANCH"
           fi
+
+          # ======================【在这里粘贴下面整块调试代码】======================
+          # --------新增目录校验调试----------
+          echo "::group::📂 目录校验：setup.sh执行完毕后"
+          pwd
+          ls -la
+          echo "KernelSU目录是否存在: $(test -d ./KernelSU && echo YES || echo NO)"
+          if [ -d ./KernelSU ];then
+            cd ./KernelSU
+            echo "KernelSU内部pwd: $(pwd)"
+            git log -1 --oneline
+            # 直接抓那个展示用内置版本字符串
+            grep -rn "30051\|BUILTIN_VERSION" drivers/kernelsu/ kernel/ 2>/dev/null || echo "未匹配版本字符串"
+            cd ..
+          fi
+          echo "::endgroup::"
+          # ======================调试代码结束======================
+
           cd ./KernelSU
           # ================= SukiSU Nova 仓库源自动切换（仅修改remote地址，不重置代码） =================
           echo "::group::DEBUG KSU_REPO INPUT"
