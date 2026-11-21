@@ -712,7 +712,7 @@ jobs:
             chmod +x "$f"
           done
 
-            - name: Add SukiSU Nova
+      - name: Add SukiSU Nova
         run: |
           cd kernel_workspace/kernel_platform
           KSU_META="${{ github.event.inputs.KSU_META }}"
