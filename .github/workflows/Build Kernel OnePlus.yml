@@ -731,18 +731,20 @@ jobs:
           [[ -n "$KSU_CUSTOM_TAG" ]] && echo "自定义版本标识: $KSU_CUSTOM_TAG" || echo "自定义版本标识: 未启用"
           [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
                
-          # ==========获取setup.sh：私库用git clone，官方源用curl raw==========
+          # ==========获取setup.sh：私库注入REPO_URL环境变量，官方源curl raw==========
           if [ "${{ github.event.inputs.KSU_REPO }}" == "ShirkNeko (SukiSU Nova 私人测试库)" ]; then
-            echo "使用 git clone 获取 setup.sh（私库）"
-            git clone --depth 1 -b "$KSU_MANAGER_BRANCH" "$PRIVATE_URL" sukisu-tmp
-            bash sukisu-tmp/kernel/setup.sh "$KSU_BUILTIN_BRANCH"
-            rm -rf sukisu-tmp
+              echo "⚠️ 使用私人测试库，传递PRIVATE_URL给setup.sh，让setup.sh内部拉取私库源码"
+              # 下载私库管理器分支的setup.sh，并且注入环境变量，修改setup.sh克隆的仓库地址为私人仓库
+              SETUP_SH_URL="https://git.zako.shirkneko.top:20004/shirkneko/SukiSU.git/raw/${KSU_MANAGER_BRANCH}/kernel/setup.sh"
+              echo "setup.sh 下载地址: ${SETUP_SH_URL}"
+              # 传递 REPO_URL 环境变量，setup.sh 识别这个变量就会clone该地址而不是硬编码github官方
+              curl -LSs --max-time 120 --retry 3 --retry-delay 5 "${SETUP_SH_URL}" | REPO_URL="${PRIVATE_URL}" bash -s "$KSU_BUILTIN_BRANCH"
           else
-            SETUP_SH_URL="${OFFICIAL_RAW_PREFIX}/${KSU_MANAGER_BRANCH}/kernel/setup.sh"
-            echo "setup.sh 下载地址: ${SETUP_SH_URL}"
-            curl -LSs --max-time 120 --retry 3 --retry-delay 5 "${SETUP_SH_URL}" | bash -s "$KSU_BUILTIN_BRANCH"
+              SETUP_SH_URL="${OFFICIAL_RAW_PREFIX}/${KSU_MANAGER_BRANCH}/kernel/setup.sh"
+              echo "setup.sh 下载地址: ${SETUP_SH_URL}"
+              curl -LSs --max-time 120 --retry 3 --retry-delay 5 "${SETUP_SH_URL}" | bash -s "$KSU_BUILTIN_BRANCH"
           fi
-
+           
           # ======================【在这里粘贴下面整块调试代码】======================
           # --------新增目录校验调试----------
           echo "::group::📂 目录校验：setup.sh执行完毕后"
